@@ -106,8 +106,7 @@ async function add(req, res) {
     throw new FluentError("user-add-invalid-email");
   }
 
-  // TODO: remove this when https://github.com/mozilla/blurts-server/issues/1148 is fixed
-  if (sessionUser.email_addresses.length >= 15) {
+  if (sessionUser.email_addresses.length >= AppConstants.MAX_NUM_ADDRESSES) {
     throw new FluentError("user-add-too-many-emails");
   }
   _checkForDuplicateEmail(sessionUser, email);
@@ -364,7 +363,7 @@ async function postRemoveFxm(req, res) {
   await DB.removeSubscriber(sessionUser);
   await FXA.revokeOAuthTokens(sessionUser);
 
-  req.session.reset();
+  req.session.destroy();
   res.redirect("/");
 }
 
@@ -502,7 +501,7 @@ async function postUnsubscribe(req, res) {
     return res.redirect("/user/preferences");
   }
   await FXA.revokeOAuthTokens(unsubscribedUser);
-  req.session.reset();
+  req.session.destroy();
   res.redirect("/");
 }
 
@@ -566,15 +565,16 @@ function logout(req, res) {
   if (EXPERIMENTS_ENABLED && req.session.experimentFlags) {
     // Persist experimentBranch across session reset
     const sessionExperimentFlags = req.session.experimentFlags;
-    req.session.reset();
-    req.session.experimentFlags = sessionExperimentFlags;
+    req.session.destroy(() => {
+      req.session = {experimentFlags: sessionExperimentFlags};
+    });
 
     // Return
     res.redirect("/");
     return;
   }
 
-  req.session.reset();
+  req.session.destroy();
   res.redirect("/");
 }
 
